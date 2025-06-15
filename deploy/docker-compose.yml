@@ -1,42 +1,56 @@
-version: '3.8'
+version: "3.8"
 
 services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DATABASE}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
   minio:
-    image: minio/minio:latest
+    image: minio/minio
     container_name: minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - miniodata:/data
     ports:
       - "9000:9000"
       - "9001:9001"
-    volumes:
-      - minio_data:/data
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server --console-address ":9001" /data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  postgres:
-    image: postgres:14
-    container_name: postgres
+  go-server:
+    container_name: go-server
+    build:
+      context: ..
+      dockerfile: ./deploy/Dockerfile
     ports:
-      - "5432:5432"
+      - "8080:8080"
     environment:
-      POSTGRES_DB: modeldb
-      POSTGRES_USER: modeluser
-      POSTGRES_PASSWORD: modelpass
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "modeluser"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      PG_HOST: ${PG_HOST}
+      PG_PORT: ${PG_PORT}
+      PG_USER: ${PG_USER}
+      PG_PASSWORD: ${PG_PASSWORD}
+      PG_DATABASE: ${PG_DATABASE}
+
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+    depends_on:
+      - postgres
+      - minio
 
 volumes:
-  minio_data:
-  postgres_data:
+  pgdata:
+  miniodata:
 
