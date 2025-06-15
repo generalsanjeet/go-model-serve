@@ -1,56 +1,61 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:15
     container_name: postgres
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_USER: ${PG_USER}
       POSTGRES_PASSWORD: ${PG_PASSWORD}
       POSTGRES_DB: ${PG_DATABASE}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   minio:
     image: minio/minio
     container_name: minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
+    restart: always
+    command: server --console-address ":9001" /data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
-      - miniodata:/data
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+      - minio_data:/data
 
   go-server:
-    container_name: go-server
     build:
       context: ..
-      dockerfile: ./deploy/Dockerfile
-    ports:
-      - "8080:8080"
+      dockerfile: Dockerfile
+    container_name: go-server
+    depends_on:
+      - postgres
+      - minio
     environment:
       PG_HOST: ${PG_HOST}
       PG_PORT: ${PG_PORT}
       PG_USER: ${PG_USER}
       PG_PASSWORD: ${PG_PASSWORD}
       PG_DATABASE: ${PG_DATABASE}
-
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET}
-    depends_on:
-      - postgres
-      - minio
+    command: ["sh", "./wait-for-it.sh", "postgres", "5432", "--", "./server"]
+    volumes:
+      - ../cmd:/app/cmd
+      - ../pkg:/app/pkg
+      - ../go.mod:/app/go.mod
+      - ../go.sum:/app/go.sum
+      - ./wait-for-it.sh:/app/wait-for-it.sh
+    working_dir: /app
+    ports:
+      - "8080:8080"
 
 volumes:
-  pgdata:
-  miniodata:
+  postgres_data:
+  minio_data:
 
